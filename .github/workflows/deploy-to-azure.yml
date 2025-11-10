@@ -23,10 +23,8 @@ jobs:
           node-version: '18'
 
       - name: Build frontend
-        working-directory: ./frontend
-        run: |
-          npm ci
-          npm run build
+        working-directory: frontend
+        run:  npm ci
 
       # Optional: Provision Cosmos DB using Azure CLI (requires AZURE_CREDENTIALS secret)
       - name: Login to Azure
