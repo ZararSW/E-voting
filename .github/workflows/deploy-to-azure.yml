@@ -11,6 +11,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      HAS_AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -28,13 +30,13 @@ jobs:
 
       # Optional: Provision Cosmos DB using Azure CLI (requires AZURE_CREDENTIALS secret)
       - name: Login to Azure
-        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        if: env.HAS_AZURE_CREDENTIALS == 'true'
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: (Optional) Create Cosmos DB serverless account
-        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        if: env.HAS_AZURE_CREDENTIALS == 'true'
         run: |
           az group create -n evoting-rg -l westus2
           az cosmosdb create -n evoting-cosmos --resource-group evoting-rg --default-consistency-level Session --capabilities EnableServerless
@@ -58,7 +60,7 @@ jobs:
           output_location: "frontend/build"
 
       - name: Set Static Web App app settings (COSMOS_CONNECTION_STRING)
-        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        if: env.HAS_AZURE_CREDENTIALS == 'true'
         run: |
           # Note: Replace <static-web-app-name> with the name of the created SWA resource
           # This step assumes you already have a Static Web App created and its resource name
