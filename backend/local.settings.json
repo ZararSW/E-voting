@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "COSMOS_CONNECTION_STRING": "<your-cosmos-connection-string>",
+    "COSMOS_DATABASE": "evoting_db",
+    "COSMOS_CONTAINER_ELECTIONS": "elections",
+    "COSMOS_CONTAINER_VOTES": "votes",
+    "ADMIN_EMAILS": "admin@university.edu"
+  }
+}

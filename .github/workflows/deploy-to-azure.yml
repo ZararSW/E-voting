@@ -1,0 +1,74 @@
+name: Deploy to Azure Static Web Apps and provision Cosmos DB
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      # Optional: Provision Cosmos DB using Azure CLI (requires AZURE_CREDENTIALS secret)
+      - name: Login to Azure
+        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: (Optional) Create Cosmos DB serverless account
+        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        run: |
+          az group create -n evoting-rg -l westus2
+          az cosmosdb create -n evoting-cosmos --resource-group evoting-rg --default-consistency-level Session --capabilities EnableServerless
+          # create database and containers
+          az cosmosdb sql database create -a evoting-cosmos -g evoting-rg -n evoting_db || true
+          az cosmosdb sql container create -a evoting-cosmos -g evoting-rg -d evoting_db -n elections --partition-key-path "/id" || true
+          az cosmosdb sql container create -a evoting-cosmos -g evoting-rg -d evoting_db -n votes --partition-key-path "/electionId" || true
+          # fetch connection string and set as GitHub repo secret or pipeline env
+          CONN=$(az cosmosdb keys list -n evoting-cosmos -g evoting-rg --type connection-strings --query "connectionStrings[0].connectionString" -o tsv)
+          echo "COSMOS_CONNECTION_STRING=$CONN" >> $GITHUB_ENV
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }} # created by the Static Web Apps GitHub Action when you link the app, or set manually
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          #### Adjust the app_location and api_location if you move folders
+          app_location: "frontend"
+          api_location: "backend/api"
+          output_location: "frontend/build"
+
+      - name: Set Static Web App app settings (COSMOS_CONNECTION_STRING)
+        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        run: |
+          # Note: Replace <static-web-app-name> with the name of the created SWA resource
+          # This step assumes you already have a Static Web App created and its resource name
+          # You can set the connection string as an app setting on the Static Web App
+          az staticwebapp appsettings set -n "${{ secrets.SWA_NAME }}" -g evoting-rg --setting-names COSMOS_CONNECTION_STRING="$COSMOS_CONNECTION_STRING" COSMOS_DATABASE=evoting_db COSMOS_CONTAINER_ELECTIONS=elections COSMOS_CONTAINER_VOTES=votes
+        env:
+          COSMOS_CONNECTION_STRING: ${{ env.COSMOS_CONNECTION_STRING }}
+
+
+# Notes:
+# - For full one-click provisioning you must set up a Service Principal and add it to the repo secrets as AZURE_CREDENTIALS.
+# - For Static Web Apps, you usually create the resource via Azure portal and link it to GitHub; that creates AZURE_STATIC_WEB_APPS_API_TOKEN automatically.
+# - The workflow above includes optional provisioning steps; if you prefer to provision resources via the portal, skip AZURE_CREDENTIALS.
